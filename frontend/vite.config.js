@@ -21,5 +21,18 @@ export default defineConfig({
         changeOrigin: true
       }
     }
+  },
+  test: {
+    globals: true,
+    environment: 'jsdom',
+    coverage: {
+      provider: 'v8',
+      reporter: ['text', 'lcov'],
+      exclude: [
+        'node_modules/',
+        'src/__tests__/',
+        '**/*.config.js',
+      ]
+    }
   }
 })
