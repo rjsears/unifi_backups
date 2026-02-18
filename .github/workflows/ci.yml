@@ -84,7 +84,7 @@ jobs:
         env:
           DATABASE_URL: postgresql+asyncpg://test_user:test_password@localhost:5432/test_unifi_backups
           SECRET_KEY: test-secret-key
-          FERNET_KEY: dGVzdC1mZXJuZXQta2V5LTMyLWJ5dGVzLWxvbmc=
+          FERNET_KEY: hFq8LcchadGdjYWF3K9QRsNTafq3aM1IFv14Xy76G1I=
           BACKUP_PATH: /tmp/test_backups
         run: |
           pytest tests/ \

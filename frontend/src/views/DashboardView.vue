@@ -126,7 +126,7 @@ import { formatDistanceToNow } from 'date-fns'
 import { ServerIcon } from '@heroicons/vue/24/outline'
 import StatCard from '@/components/dashboard/StatCard.vue'
 import DeviceCard from '@/components/dashboard/DeviceCard.vue'
-import api from '@/api'
+// import api from '@/api'  // Will be used in later phases
 
 const loading = ref(true)
 const devices = ref([])
