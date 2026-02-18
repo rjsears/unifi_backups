@@ -122,7 +122,7 @@ jobs:
       - name: Build and push Frontend image
         uses: docker/build-push-action@v5
         with:
-          context: ./frontend
+          context: .
           file: ./docker/frontend.Dockerfile
           platforms: linux/amd64,linux/arm64
           push: true
