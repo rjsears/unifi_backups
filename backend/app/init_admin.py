@@ -56,7 +56,7 @@ async def create_initial_admin():
         user = await AuthService.create_user(
             db, username=username, email=email, password=password, is_admin=True
         )
-        print(f"Admin user created successfully!")
+        print("Admin user created successfully!")
         print(f"  Username: {user.username}")
         print(f"  Email: {user.email}")
 

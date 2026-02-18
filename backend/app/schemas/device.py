@@ -4,7 +4,7 @@
 
 from datetime import datetime
 
-from pydantic import BaseModel, Field, IPvAnyAddress
+from pydantic import BaseModel, Field
 
 
 class DeviceBase(BaseModel):
