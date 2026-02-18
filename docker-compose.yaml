@@ -1,0 +1,69 @@
+# -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+# UniFi Backup Manager - Docker Compose (Development)
+# -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+
+version: '3.8'
+
+services:
+  db:
+    image: postgres:15-alpine
+    container_name: unifi-backup-db
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_USER=unifi_backup
+      - POSTGRES_PASSWORD=changeme_dev
+      - POSTGRES_DB=unifi_backups
+    ports:
+      - "5432:5432"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U unifi_backup -d unifi_backups"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: ../docker/backend.Dockerfile
+    container_name: unifi-backup-api
+    volumes:
+      - ./backend:/app
+      - backup_data:/backups
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://unifi_backup:changeme_dev@db:5432/unifi_backups
+      - BACKUP_PATH=/backups
+      - SECRET_KEY=dev-secret-key-change-in-production
+      - FERNET_KEY=${FERNET_KEY:-your-fernet-key-here}
+      - DEBUG=true
+      - CORS_ORIGINS=["http://localhost:5173","http://localhost:3000"]
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: ../docker/frontend.Dockerfile
+    container_name: unifi-backup-frontend
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    ports:
+      - "5173:5173"
+    environment:
+      - VITE_API_URL=http://localhost:8000
+    command: npm run dev -- --host
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+volumes:
+  backup_data:
+    driver: local
+  postgres_data:
+    driver: local
