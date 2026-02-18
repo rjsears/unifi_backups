@@ -663,9 +663,9 @@ VITE_API_URL=http://localhost:8000
 
 ## GitHub Actions Workflows
 
-### lint.yml
+### ci.yml (Lint, Test & Build)
 ```yaml
-name: Lint & Build
+name: CI - Lint, Test & Build
 
 on:
   push:
@@ -674,6 +674,9 @@ on:
     branches: [main]
 
 jobs:
+  # ============================================================================
+  # Backend: Lint with Ruff
+  # ============================================================================
   backend-lint:
     name: Backend Lint (Ruff)
     runs-on: ubuntu-latest
@@ -692,9 +695,86 @@ jobs:
       - name: Install ruff
         run: pip install ruff
 
-      - name: Run ruff
+      - name: Run ruff linter
         run: ruff check app/
 
+      - name: Run ruff formatter check
+        run: ruff format --check app/
+
+  # ============================================================================
+  # Backend: Unit & Integration Tests with pytest
+  # ============================================================================
+  backend-test:
+    name: Backend Tests (pytest)
+    runs-on: ubuntu-latest
+    needs: backend-lint
+    defaults:
+      run:
+        working-directory: backend
+
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_USER: test_user
+          POSTGRES_PASSWORD: test_password
+          POSTGRES_DB: test_unifi_backups
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Cache pip dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('backend/requirements*.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -r requirements-dev.txt
+
+      - name: Run pytest with coverage
+        env:
+          DATABASE_URL: postgresql+asyncpg://test_user:test_password@localhost:5432/test_unifi_backups
+          SECRET_KEY: test-secret-key
+          FERNET_KEY: test-fernet-key-32-bytes-long-xx=
+          BACKUP_PATH: /tmp/test_backups
+        run: |
+          pytest tests/ \
+            --cov=app \
+            --cov-report=xml \
+            --cov-report=term-missing \
+            --cov-fail-under=70 \
+            -v
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ./backend/coverage.xml
+          flags: backend
+          name: backend-coverage
+          fail_ci_if_error: false
+
+  # ============================================================================
+  # Frontend: Lint with ESLint
+  # ============================================================================
   frontend-lint:
     name: Frontend Lint (ESLint)
     runs-on: ubuntu-latest
@@ -709,6 +789,8 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
 
       - name: Install dependencies
         run: npm ci
@@ -716,8 +798,11 @@ jobs:
       - name: Run ESLint
         run: npm run lint
 
-  frontend-build:
-    name: Frontend Build
+  # ============================================================================
+  # Frontend: Unit Tests with Vitest
+  # ============================================================================
+  frontend-test:
+    name: Frontend Tests (Vitest)
     runs-on: ubuntu-latest
     needs: frontend-lint
     defaults:
@@ -731,15 +816,81 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run Vitest
+        run: npm run test:ci
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ./frontend/coverage/lcov.info
+          flags: frontend
+          name: frontend-coverage
+          fail_ci_if_error: false
+
+  # ============================================================================
+  # Frontend: Build Check
+  # ============================================================================
+  frontend-build:
+    name: Frontend Build
+    runs-on: ubuntu-latest
+    needs: [frontend-lint, frontend-test]
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
 
       - name: Install dependencies
         run: npm ci
 
       - name: Build
         run: npm run build
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-dist
+          path: frontend/dist
+          retention-days: 7
+
+  # ============================================================================
+  # All CI Checks Passed (used as branch protection requirement)
+  # ============================================================================
+  ci-success:
+    name: CI Success
+    runs-on: ubuntu-latest
+    needs: [backend-lint, backend-test, frontend-lint, frontend-test, frontend-build]
+    if: always()
+    steps:
+      - name: Check all jobs passed
+        run: |
+          if [[ "${{ needs.backend-lint.result }}" != "success" ]] || \
+             [[ "${{ needs.backend-test.result }}" != "success" ]] || \
+             [[ "${{ needs.frontend-lint.result }}" != "success" ]] || \
+             [[ "${{ needs.frontend-test.result }}" != "success" ]] || \
+             [[ "${{ needs.frontend-build.result }}" != "success" ]]; then
+            echo "One or more CI jobs failed"
+            exit 1
+          fi
+          echo "All CI checks passed!"
 ```
 
-### docker-publish.yml
+### docker-publish.yml (Build & Push to Docker Hub)
 ```yaml
 name: Build and Publish Docker Images
 
@@ -750,24 +901,45 @@ on:
     tags:
       - 'v*.*.*'
   workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag to build (e.g., v1.0.0 or latest)'
+        required: false
+        default: 'latest'
 
 env:
   REGISTRY: docker.io
-  DOCKER_HUB_USERNAME: rjsears
+  IMAGE_NAME_API: unifi-backup-api
+  IMAGE_NAME_FRONTEND: unifi-backup-frontend
 
 jobs:
-  lint:
-    uses: ./.github/workflows/lint.yml
+  # ============================================================================
+  # Run CI checks first
+  # ============================================================================
+  ci:
+    name: Run CI Checks
+    uses: ./.github/workflows/ci.yml
 
+  # ============================================================================
+  # Build and Push Backend API Image
+  # ============================================================================
   build-backend:
-    name: Build Backend Image
+    name: Build & Push Backend Image
     runs-on: ubuntu-latest
-    needs: lint
+    needs: ci
     if: github.event_name != 'pull_request'
+    permissions:
+      contents: read
+      packages: write
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+        with:
+          platforms: linux/amd64,linux/arm64
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -775,20 +947,28 @@ jobs:
       - name: Log in to Docker Hub
         uses: docker/login-action@v3
         with:
-          username: ${{ env.DOCKER_HUB_USERNAME }}
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Extract metadata
+      - name: Extract metadata for Backend
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ env.REGISTRY }}/${{ env.DOCKER_HUB_USERNAME }}/unifi-backup-api
+          images: ${{ env.REGISTRY }}/${{ secrets.DOCKERHUB_USERNAME }}/${{ env.IMAGE_NAME_API }}
           tags: |
             type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
             type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}
+            type=raw,value=${{ github.event.inputs.tag }},enable=${{ github.event_name == 'workflow_dispatch' }}
             type=sha,prefix=sha-
+          labels: |
+            org.opencontainers.image.title=UniFi Backup API
+            org.opencontainers.image.description=Backend API for UniFi Backup Manager
+            org.opencontainers.image.vendor=rjsears
+            maintainer=rjsears
 
-      - name: Build and push
+      - name: Build and push Backend image
         uses: docker/build-push-action@v5
         with:
           context: ./backend
@@ -799,16 +979,34 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+          build-args: |
+            BUILD_DATE=${{ github.event.head_commit.timestamp }}
+            VCS_REF=${{ github.sha }}
+            VERSION=${{ steps.meta.outputs.version }}
 
+      - name: Backend image digest
+        run: echo "Backend image pushed with digest ${{ steps.meta.outputs.digest }}"
+
+  # ============================================================================
+  # Build and Push Frontend Image
+  # ============================================================================
   build-frontend:
-    name: Build Frontend Image
+    name: Build & Push Frontend Image
     runs-on: ubuntu-latest
-    needs: lint
+    needs: ci
     if: github.event_name != 'pull_request'
+    permissions:
+      contents: read
+      packages: write
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+        with:
+          platforms: linux/amd64,linux/arm64
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -816,20 +1014,28 @@ jobs:
       - name: Log in to Docker Hub
         uses: docker/login-action@v3
         with:
-          username: ${{ env.DOCKER_HUB_USERNAME }}
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Extract metadata
+      - name: Extract metadata for Frontend
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ env.REGISTRY }}/${{ env.DOCKER_HUB_USERNAME }}/unifi-backup-frontend
+          images: ${{ env.REGISTRY }}/${{ secrets.DOCKERHUB_USERNAME }}/${{ env.IMAGE_NAME_FRONTEND }}
           tags: |
             type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
             type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}
+            type=raw,value=${{ github.event.inputs.tag }},enable=${{ github.event_name == 'workflow_dispatch' }}
             type=sha,prefix=sha-
+          labels: |
+            org.opencontainers.image.title=UniFi Backup Frontend
+            org.opencontainers.image.description=Web UI for UniFi Backup Manager
+            org.opencontainers.image.vendor=rjsears
+            maintainer=rjsears
 
-      - name: Build and push
+      - name: Build and push Frontend image
         uses: docker/build-push-action@v5
         with:
           context: ./frontend
@@ -840,30 +1046,154 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+          build-args: |
+            BUILD_DATE=${{ github.event.head_commit.timestamp }}
+            VCS_REF=${{ github.sha }}
+            VERSION=${{ steps.meta.outputs.version }}
 
+      - name: Frontend image digest
+        run: echo "Frontend image pushed with digest ${{ steps.meta.outputs.digest }}"
+
+  # ============================================================================
+  # Security Scanning with Trivy
+  # ============================================================================
   security-scan:
-    name: Security Scan
+    name: Security Scan (Trivy)
     runs-on: ubuntu-latest
     needs: [build-backend, build-frontend]
+    if: github.event_name != 'pull_request'
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Run Trivy vulnerability scanner
+      - name: Run Trivy on Backend image
         uses: aquasecurity/trivy-action@master
         with:
-          image-ref: ${{ env.REGISTRY }}/${{ env.DOCKER_HUB_USERNAME }}/unifi-backup-api:latest
+          image-ref: ${{ env.REGISTRY }}/${{ secrets.DOCKERHUB_USERNAME }}/${{ env.IMAGE_NAME_API }}:latest
           format: 'sarif'
-          output: 'trivy-results.sarif'
+          output: 'trivy-backend.sarif'
           severity: 'CRITICAL,HIGH'
 
-      - name: Upload Trivy scan results
+      - name: Run Trivy on Frontend image
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ env.REGISTRY }}/${{ secrets.DOCKERHUB_USERNAME }}/${{ env.IMAGE_NAME_FRONTEND }}:latest
+          format: 'sarif'
+          output: 'trivy-frontend.sarif'
+          severity: 'CRITICAL,HIGH'
+
+      - name: Upload Backend Trivy results
         uses: github/codeql-action/upload-sarif@v4
         if: always()
         continue-on-error: true
         with:
-          sarif_file: 'trivy-results.sarif'
+          sarif_file: 'trivy-backend.sarif'
+          category: 'trivy-backend'
+
+      - name: Upload Frontend Trivy results
+        uses: github/codeql-action/upload-sarif@v4
+        if: always()
+        continue-on-error: true
+        with:
+          sarif_file: 'trivy-frontend.sarif'
+          category: 'trivy-frontend'
+
+  # ============================================================================
+  # Update Docker Hub README
+  # ============================================================================
+  update-dockerhub-readme:
+    name: Update Docker Hub Description
+    runs-on: ubuntu-latest
+    needs: [build-backend, build-frontend]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Update Backend Docker Hub README
+        uses: peter-evans/dockerhub-description@v4
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+          repository: ${{ secrets.DOCKERHUB_USERNAME }}/${{ env.IMAGE_NAME_API }}
+          short-description: "UniFi Backup Manager - Backend API"
+          readme-filepath: ./README.md
+
+      - name: Update Frontend Docker Hub README
+        uses: peter-evans/dockerhub-description@v4
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+          repository: ${{ secrets.DOCKERHUB_USERNAME }}/${{ env.IMAGE_NAME_FRONTEND }}
+          short-description: "UniFi Backup Manager - Web Frontend"
+          readme-filepath: ./README.md
+```
+
+### Required GitHub Secrets
+
+Configure these secrets in your repository settings (Settings → Secrets and variables → Actions):
+
+| Secret | Description |
+|--------|-------------|
+| `DOCKERHUB_USERNAME` | Your Docker Hub username |
+| `DOCKERHUB_TOKEN` | Docker Hub access token (create at hub.docker.com → Account Settings → Security → New Access Token) |
+| `CODECOV_TOKEN` | Codecov upload token (get from codecov.io after linking your repo) |
+
+### Codecov Setup
+
+1. Go to [codecov.io](https://codecov.io) and sign in with GitHub
+2. Add your repository
+3. Copy the upload token from the repository settings
+4. Add it as `CODECOV_TOKEN` secret in GitHub
+
+Codecov will then:
+- Show coverage % on every PR as a comment
+- Track coverage trends over time in a dashboard
+- Flag files with decreased coverage
+- Provide line-by-line coverage visualization
+
+### Required npm Scripts (package.json)
+
+Add these scripts to `frontend/package.json`:
+
+```json
+{
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "lint": "eslint . --ext .vue,.js,.jsx,.cjs,.mjs",
+    "lint:fix": "eslint . --ext .vue,.js,.jsx,.cjs,.mjs --fix",
+    "test": "vitest",
+    "test:ci": "vitest run --coverage"
+  }
+}
+```
+
+### Required pytest Configuration (pyproject.toml)
+
+Add to `backend/pyproject.toml`:
+
+```toml
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_functions = ["test_*"]
+addopts = "-v --tb=short"
+
+[tool.coverage.run]
+source = ["app"]
+omit = ["app/tests/*", "app/__init__.py"]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "if TYPE_CHECKING:",
+    "raise NotImplementedError",
+]
 ```
 
 ---
@@ -1031,4 +1361,4 @@ The following UniFi device types should have corresponding images in `frontend/p
 
 *Plan created: February 16, 2026*
 *Last updated: February 18, 2026*
-*Version: 1.5*
+*Version: 1.8*
