@@ -28,9 +28,18 @@ import {
 } from '@heroicons/vue/24/outline'
 
 const props = defineProps({
-  title: String,
-  value: [String, Number],
-  subtitle: String,
+  title: {
+    type: String,
+    default: '',
+  },
+  value: {
+    type: [String, Number],
+    default: 0,
+  },
+  subtitle: {
+    type: String,
+    default: '',
+  },
   icon: {
     type: String,
     default: 'server',

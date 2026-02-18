@@ -10,15 +10,17 @@
   >
     <div class="flex items-start space-x-4">
       <!-- Device Image -->
-      <div class="flex-shrink-0 w-16 h-16 rounded-lg flex items-center justify-center"
-        style="background-color: var(--color-bg-secondary);">
+      <div
+        class="flex-shrink-0 w-16 h-16 rounded-lg flex items-center justify-center"
+        style="background-color: var(--color-bg-secondary);"
+      >
         <img
           v-if="deviceImage"
           :src="deviceImage"
           :alt="device.device_type"
           class="w-12 h-12 object-contain"
           @error="imageError = true"
-        />
+        >
         <ServerIcon v-else class="w-8 h-8" style="color: var(--color-text-muted);" />
       </div>
 
@@ -29,7 +31,7 @@
             {{ device.name }}
           </h3>
           <span :class="statusClass" class="flex items-center text-xs">
-            <span :class="statusDotClass" class="w-2 h-2 rounded-full mr-1"></span>
+            <span :class="statusDotClass" class="w-2 h-2 rounded-full mr-1" />
             {{ statusText }}
           </span>
         </div>

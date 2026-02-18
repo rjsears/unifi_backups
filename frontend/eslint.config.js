@@ -16,7 +16,7 @@ export default [
     ignores: ['**/dist/**', '**/node_modules/**', '**/coverage/**'],
   },
   js.configs.recommended,
-  ...pluginVue.configs['flat/essential'],
+  ...pluginVue.configs['flat/recommended'],
   {
     languageOptions: {
       globals: {
@@ -25,8 +25,9 @@ export default [
       },
     },
     rules: {
-      // Essential config only catches errors, not style issues
       'vue/multi-word-component-names': 'off',
+      'vue/max-attributes-per-line': 'off',
+      'vue/singleline-html-element-content-newline': 'off',
     },
   },
 ]

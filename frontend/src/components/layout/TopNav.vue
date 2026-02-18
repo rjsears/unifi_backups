@@ -6,8 +6,10 @@
 <template>
   <div class="min-h-screen" style="background-color: var(--color-bg-primary);">
     <!-- Top Navigation Bar -->
-    <header class="sticky top-0 z-50 border-b backdrop-blur-sm"
-      style="background-color: var(--color-surface); border-color: var(--color-border);">
+    <header
+      class="sticky top-0 z-50 border-b backdrop-blur-sm"
+      style="background-color: var(--color-surface); border-color: var(--color-border);"
+    >
       <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <div class="flex h-16 items-center justify-between">
           <!-- Logo -->
@@ -41,10 +43,10 @@
           <div class="flex items-center space-x-3">
             <!-- Theme toggle -->
             <button
-              @click="themeStore.toggleColorMode"
               class="p-2 rounded-lg transition-colors hover:bg-gray-100 dark:hover:bg-slate-800"
               style="color: var(--color-text-secondary);"
               :title="themeTitle"
+              @click="themeStore.toggleColorMode"
             >
               <SunIcon v-if="themeStore.isDark" class="h-5 w-5" />
               <MoonIcon v-else class="h-5 w-5" />
@@ -123,8 +125,11 @@
         leave-from-class="opacity-100 translate-y-0"
         leave-to-class="opacity-0 -translate-y-1"
       >
-        <div v-if="mobileMenuOpen" class="md:hidden border-t"
-          style="background-color: var(--color-surface); border-color: var(--color-border);">
+        <div
+          v-if="mobileMenuOpen"
+          class="md:hidden border-t"
+          style="background-color: var(--color-surface); border-color: var(--color-border);"
+        >
           <nav class="px-4 py-3 space-y-1">
             <router-link
               v-for="item in navItems"
@@ -154,7 +159,7 @@
 
     <!-- Change Password Modal -->
     <Modal v-model="showPasswordModal" title="Change Password">
-      <form @submit.prevent="submitPasswordChange" class="space-y-4">
+      <form class="space-y-4" @submit.prevent="submitPasswordChange">
         <div>
           <label class="block text-sm font-medium mb-1" style="color: var(--color-text-secondary);">
             Current Password
@@ -164,7 +169,7 @@
             type="password"
             class="input"
             required
-          />
+          >
         </div>
         <div>
           <label class="block text-sm font-medium mb-1" style="color: var(--color-text-secondary);">
@@ -176,7 +181,7 @@
             class="input"
             required
             minlength="8"
-          />
+          >
         </div>
         <div>
           <label class="block text-sm font-medium mb-1" style="color: var(--color-text-secondary);">
@@ -187,7 +192,7 @@
             type="password"
             class="input"
             required
-          />
+          >
         </div>
         <div class="flex justify-end space-x-3 pt-4">
           <button

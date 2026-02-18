@@ -20,7 +20,7 @@
       >
         <div class="min-h-screen px-4 text-center">
           <!-- Background overlay -->
-          <div class="fixed inset-0 bg-black/60" @click="close"></div>
+          <div class="fixed inset-0 bg-black/60" @click="close" />
 
           <!-- Centering element -->
           <span class="inline-block h-screen align-middle" aria-hidden="true">&#8203;</span>
@@ -63,7 +63,7 @@
 
               <!-- Content -->
               <div class="px-6 py-4">
-                <slot></slot>
+                <slot />
               </div>
 
               <!-- Footer -->
@@ -72,7 +72,7 @@
                 class="px-6 py-4 border-t rounded-b-lg"
                 style="border-color: var(--color-border); background-color: var(--color-bg-secondary);"
               >
-                <slot name="footer"></slot>
+                <slot name="footer" />
               </div>
             </div>
           </transition>

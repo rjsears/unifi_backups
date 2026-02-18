@@ -66,9 +66,9 @@ async function handleLogin() {
 
       <!-- Login Form -->
       <form
-        @submit.prevent="handleLogin"
         class="rounded-xl border p-6"
         style="background-color: var(--color-surface); border-color: var(--color-border);"
+        @submit.prevent="handleLogin"
       >
         <!-- Error Alert -->
         <div
@@ -92,7 +92,7 @@ async function handleLogin() {
               autocomplete="username"
               placeholder="Enter your username"
               class="input pl-10"
-            />
+            >
           </div>
         </div>
 
@@ -110,12 +110,12 @@ async function handleLogin() {
               autocomplete="current-password"
               placeholder="Enter your password"
               class="input pl-10 pr-10"
-            />
+            >
             <button
               type="button"
-              @click="showPassword = !showPassword"
               class="absolute right-3 top-1/2 -translate-y-1/2 hover:opacity-70"
               style="color: var(--color-text-muted);"
+              @click="showPassword = !showPassword"
             >
               <EyeSlashIcon v-if="showPassword" class="h-5 w-5" />
               <EyeIcon v-else class="h-5 w-5" />

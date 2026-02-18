@@ -49,7 +49,7 @@
       </div>
 
       <div v-if="loading" class="flex items-center justify-center py-12">
-        <div class="spinner w-8 h-8"></div>
+        <div class="spinner w-8 h-8" />
       </div>
 
       <div v-else-if="devices.length === 0" class="card p-8 text-center">

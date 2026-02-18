@@ -19,7 +19,7 @@
 
     <!-- Devices Grid -->
     <div v-if="loading" class="flex items-center justify-center py-12">
-      <div class="spinner w-8 h-8"></div>
+      <div class="spinner w-8 h-8" />
     </div>
 
     <div v-else-if="devices.length === 0" class="card p-12 text-center">
@@ -44,18 +44,18 @@
 
     <!-- Add Device Modal -->
     <Modal v-model="showAddModal" title="Add Device" size="lg">
-      <form @submit.prevent="handleAddDevice" class="space-y-4">
+      <form class="space-y-4" @submit.prevent="handleAddDevice">
         <div>
           <label class="block text-sm font-medium mb-1" style="color: var(--color-text-secondary);">
             Device Name
           </label>
-          <input v-model="newDevice.name" type="text" class="input" placeholder="e.g., Main UDM-Pro" required />
+          <input v-model="newDevice.name" type="text" class="input" placeholder="e.g., Main UDM-Pro" required>
         </div>
         <div>
           <label class="block text-sm font-medium mb-1" style="color: var(--color-text-secondary);">
             IP Address
           </label>
-          <input v-model="newDevice.ip_address" type="text" class="input" placeholder="e.g., 192.168.1.1" required />
+          <input v-model="newDevice.ip_address" type="text" class="input" placeholder="e.g., 192.168.1.1" required>
         </div>
         <div>
           <label class="block text-sm font-medium mb-1" style="color: var(--color-text-secondary);">
@@ -79,7 +79,7 @@
           <label class="block text-sm font-medium mb-1" style="color: var(--color-text-secondary);">
             API Key
           </label>
-          <input v-model="newDevice.api_key" type="password" class="input" placeholder="Enter UniFi API key" required />
+          <input v-model="newDevice.api_key" type="password" class="input" placeholder="Enter UniFi API key" required>
           <p class="text-xs mt-1" style="color: var(--color-text-muted);">
             Your API key will be encrypted before storage
           </p>
