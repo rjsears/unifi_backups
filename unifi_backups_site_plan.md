@@ -758,9 +758,19 @@ jobs:
         run: |
           pytest tests/ \
             --cov=app \
+            --cov-report=xml \
             --cov-report=term-missing \
             --cov-fail-under=70 \
             -v
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ./backend/coverage.xml
+          flags: backend
+          name: backend-coverage
+          fail_ci_if_error: false
 
   # ============================================================================
   # Frontend: Lint with ESLint
@@ -814,6 +824,15 @@ jobs:
 
       - name: Run Vitest
         run: npm run test:ci
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ./frontend/coverage/lcov.info
+          flags: frontend
+          name: frontend-coverage
+          fail_ci_if_error: false
 
   # ============================================================================
   # Frontend: Build Check
@@ -1120,6 +1139,20 @@ Configure these secrets in your repository settings (Settings → Secrets and va
 |--------|-------------|
 | `DOCKERHUB_USERNAME` | Your Docker Hub username |
 | `DOCKERHUB_TOKEN` | Docker Hub access token (create at hub.docker.com → Account Settings → Security → New Access Token) |
+| `CODECOV_TOKEN` | Codecov upload token (get from codecov.io after linking your repo) |
+
+### Codecov Setup
+
+1. Go to [codecov.io](https://codecov.io) and sign in with GitHub
+2. Add your repository
+3. Copy the upload token from the repository settings
+4. Add it as `CODECOV_TOKEN` secret in GitHub
+
+Codecov will then:
+- Show coverage % on every PR as a comment
+- Track coverage trends over time in a dashboard
+- Flag files with decreased coverage
+- Provide line-by-line coverage visualization
 
 ### Required npm Scripts (package.json)
 
@@ -1328,4 +1361,4 @@ The following UniFi device types should have corresponding images in `frontend/p
 
 *Plan created: February 16, 2026*
 *Last updated: February 18, 2026*
-*Version: 1.7*
+*Version: 1.8*
