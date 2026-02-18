@@ -29,7 +29,11 @@ A web-based application for managing backups of UniFi network devices. The syste
 | Pydantic | ^2.x | Data validation |
 | APScheduler | ^3.10.x | Background job scheduling |
 | aiohttp | ^3.9.x | Async HTTP for UniFi API |
-| SQLite | 3.x | Database (default) |
+| PostgreSQL | 15+ | Database |
+| asyncpg | ^0.29.x | Async PostgreSQL driver |
+| python-jose | ^3.3.x | JWT token handling |
+| passlib | ^1.7.x | Password hashing (bcrypt) |
+| cryptography | ^42.x | API key encryption (Fernet) |
 
 ### Infrastructure
 | Technology | Purpose |
@@ -58,18 +62,21 @@ unifi_backups/
 │   │   ├── dependencies.py             # FastAPI dependencies
 │   │   ├── models/
 │   │   │   ├── __init__.py
+│   │   │   ├── user.py                 # User account model
 │   │   │   ├── device.py               # UniFi device model
 │   │   │   ├── backup.py               # Backup record model
 │   │   │   ├── schedule.py             # Backup schedule model
 │   │   │   └── settings.py             # System settings model
 │   │   ├── schemas/
 │   │   │   ├── __init__.py
+│   │   │   ├── user.py                 # User/Auth Pydantic schemas
 │   │   │   ├── device.py               # Device Pydantic schemas
 │   │   │   ├── backup.py               # Backup Pydantic schemas
 │   │   │   ├── schedule.py             # Schedule Pydantic schemas
 │   │   │   └── settings.py             # Settings Pydantic schemas
 │   │   ├── routers/
 │   │   │   ├── __init__.py
+│   │   │   ├── auth.py                 # Authentication endpoints
 │   │   │   ├── devices.py              # Device CRUD endpoints
 │   │   │   ├── backups.py              # Backup management endpoints
 │   │   │   ├── schedules.py            # Schedule management endpoints
@@ -77,6 +84,8 @@ unifi_backups/
 │   │   │   └── storage.py              # Storage stats endpoints
 │   │   ├── services/
 │   │   │   ├── __init__.py
+│   │   │   ├── auth_service.py         # Authentication & JWT handling
+│   │   │   ├── crypto_service.py       # API key encryption/decryption
 │   │   │   ├── unifi_client.py         # UniFi API client
 │   │   │   ├── backup_service.py       # Backup logic
 │   │   │   ├── scheduler_service.py    # APScheduler management
@@ -112,7 +121,8 @@ unifi_backups/
 │   │   ├── App.vue                     # Root component
 │   │   ├── style.css                   # Global styles + Tailwind
 │   │   ├── api/
-│   │   │   ├── index.js                # Axios instance
+│   │   │   ├── index.js                # Axios instance with JWT interceptor
+│   │   │   ├── auth.js                 # Login/logout API calls
 │   │   │   ├── devices.js              # Device API calls
 │   │   │   ├── backups.js              # Backup API calls
 │   │   │   ├── schedules.js            # Schedule API calls
@@ -144,12 +154,14 @@ unifi_backups/
 │   │   │       ├── LoadingSpinner.vue  # Loading indicator
 │   │   │       └── ToastNotification.vue # Notifications
 │   │   ├── views/
+│   │   │   ├── LoginView.vue           # Login page
 │   │   │   ├── DashboardView.vue       # Main dashboard
 │   │   │   ├── DevicesView.vue         # Device management
 │   │   │   ├── BackupsView.vue         # Backup browser
 │   │   │   ├── SchedulesView.vue       # Schedule management
 │   │   │   └── SettingsView.vue        # System settings
 │   │   ├── stores/
+│   │   │   ├── auth.js                 # Auth state & JWT handling
 │   │   │   ├── devices.js              # Device state
 │   │   │   ├── backups.js              # Backup state
 │   │   │   ├── schedules.js            # Schedule state
@@ -178,21 +190,34 @@ unifi_backups/
 
 ## Database Schema
 
+### users
+| Column | Type | Description |
+|--------|------|-------------|
+| id | INTEGER | Primary key |
+| username | VARCHAR(50) | Unique username |
+| email | VARCHAR(255) | Email address |
+| password_hash | VARCHAR(255) | Bcrypt hashed password |
+| is_active | BOOLEAN | Account enabled |
+| is_admin | BOOLEAN | Admin privileges |
+| last_login | TIMESTAMP | Last login time |
+| created_at | TIMESTAMP | Record creation |
+| updated_at | TIMESTAMP | Last update |
+
 ### devices
 | Column | Type | Description |
 |--------|------|-------------|
 | id | INTEGER | Primary key |
 | name | VARCHAR(100) | Display name |
 | ip_address | VARCHAR(45) | Device IP |
-| api_key | VARCHAR(255) | Encrypted API key |
+| api_key_encrypted | TEXT | Fernet-encrypted API key |
 | device_type | VARCHAR(50) | UDM-Pro, USG, etc. |
 | model | VARCHAR(100) | Model identifier |
 | firmware_version | VARCHAR(50) | Current firmware |
 | mac_address | VARCHAR(17) | MAC address |
 | is_active | BOOLEAN | Enabled for backups |
-| last_seen | DATETIME | Last successful connection |
-| created_at | DATETIME | Record creation |
-| updated_at | DATETIME | Last update |
+| last_seen | TIMESTAMP | Last successful connection |
+| created_at | TIMESTAMP | Record creation |
+| updated_at | TIMESTAMP | Last update |
 
 ### backups
 | Column | Type | Description |
@@ -235,6 +260,15 @@ unifi_backups/
 ---
 
 ## API Endpoints
+
+### Authentication
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | /api/auth/login | Authenticate user, returns JWT |
+| POST | /api/auth/logout | Invalidate current token |
+| GET | /api/auth/me | Get current user info |
+| POST | /api/auth/refresh | Refresh JWT token |
+| PUT | /api/auth/password | Change password |
 
 ### Devices
 | Method | Endpoint | Description |
@@ -472,6 +506,24 @@ POST /api/s/{site}/cmd/backup
 version: '3.8'
 
 services:
+  db:
+    image: postgres:15-alpine
+    container_name: unifi-backup-db
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_USER=unifi_backup
+      - POSTGRES_PASSWORD=changeme_dev
+      - POSTGRES_DB=unifi_backups
+    ports:
+      - "5432:5432"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U unifi_backup -d unifi_backups"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
   backend:
     build:
       context: ./backend
@@ -480,13 +532,17 @@ services:
     volumes:
       - ./backend:/app
       - backup_data:/backups
-      - ./data:/data
     environment:
-      - DATABASE_URL=sqlite:///data/unifi_backups.db
+      - DATABASE_URL=postgresql+asyncpg://unifi_backup:changeme_dev@db:5432/unifi_backups
       - BACKUP_PATH=/backups
+      - SECRET_KEY=dev-secret-key-change-in-production
+      - FERNET_KEY=your-fernet-key-here
       - DEBUG=true
     ports:
       - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
     restart: unless-stopped
 
   frontend:
@@ -508,6 +564,8 @@ services:
 volumes:
   backup_data:
     driver: local
+  postgres_data:
+    driver: local
 ```
 
 ### docker-compose.prod.yaml (Production)
@@ -515,16 +573,36 @@ volumes:
 version: '3.8'
 
 services:
+  db:
+    image: postgres:15-alpine
+    container_name: unifi-backup-db
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=unifi_backups
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d unifi_backups"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
   backend:
     image: rjsears/unifi-backup-api:latest
     container_name: unifi-backup-api
     volumes:
       - backup_data:/backups
-      - db_data:/data
     environment:
-      - DATABASE_URL=sqlite:///data/unifi_backups.db
+      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/unifi_backups
       - BACKUP_PATH=/backups
+      - SECRET_KEY=${SECRET_KEY}
+      - FERNET_KEY=${FERNET_KEY}
       - DEBUG=false
+    depends_on:
+      db:
+        condition: service_healthy
     restart: unless-stopped
 
   frontend:
@@ -549,18 +627,30 @@ services:
 volumes:
   backup_data:
     driver: local
-  db_data:
+  postgres_data:
     driver: local
 ```
 
 ### Environment Variables
 ```bash
+# Database (PostgreSQL)
+POSTGRES_USER=unifi_backup
+POSTGRES_PASSWORD=your-secure-password-here
+DATABASE_URL=postgresql+asyncpg://unifi_backup:password@db:5432/unifi_backups
+
 # Backend
-DATABASE_URL=sqlite:///data/unifi_backups.db
 BACKUP_PATH=/backups
-SECRET_KEY=your-secret-key-here
 DEBUG=false
 LOG_LEVEL=INFO
+
+# Authentication (JWT)
+SECRET_KEY=your-jwt-secret-key-here          # Used for signing JWT tokens
+JWT_ALGORITHM=HS256
+JWT_ACCESS_TOKEN_EXPIRE_MINUTES=30
+JWT_REFRESH_TOKEN_EXPIRE_DAYS=7
+
+# API Key Encryption (Fernet)
+FERNET_KEY=your-fernet-key-here              # Generate with: python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
 
 # Frontend
 VITE_API_URL=http://localhost:8000
@@ -877,13 +967,32 @@ jobs:
 
 ## Security Considerations
 
-1. **API Key Storage**: Encrypt API keys at rest using Fernet
-2. **Session Management**: Secure cookie handling for UniFi sessions
-3. **Input Validation**: Pydantic schemas for all inputs
-4. **File Downloads**: Validate backup file paths to prevent directory traversal
-5. **CORS**: Restrict to frontend origin in production
-6. **Rate Limiting**: Prevent backup spam
-7. **Secrets Management**: Environment variables, never in code
+### User Authentication (JWT)
+- **Login Flow**: User submits username/password → Backend verifies against bcrypt hash → Returns JWT access token + refresh token
+- **Token Storage**: Access token stored in memory (Pinia store), refresh token in httpOnly cookie
+- **Protected Routes**: Vue Router guards check for valid token before allowing access
+- **Token Refresh**: Automatic refresh when access token expires (30 min default)
+- **Password Storage**: Bcrypt with cost factor 12
+
+### UniFi Device API Key Encryption
+- **Encryption Method**: Fernet symmetric encryption (AES-128-CBC with HMAC)
+- **Key Storage**: FERNET_KEY stored in environment variable, never in database
+- **Workflow**:
+  1. User adds device with API key via UI
+  2. Backend encrypts API key: `fernet.encrypt(api_key.encode())`
+  3. Encrypted key stored in `devices.api_key_encrypted` column
+  4. When backup runs: `fernet.decrypt(encrypted_key).decode()`
+  5. Decrypted key used for UniFi API call, then discarded from memory
+- **Key Rotation**: Generate new FERNET_KEY, re-encrypt all device API keys via migration script
+
+### Additional Security Measures
+1. **Input Validation**: Pydantic schemas for all API inputs
+2. **File Downloads**: Validate backup file paths to prevent directory traversal
+3. **CORS**: Restrict to frontend origin in production
+4. **Rate Limiting**: Prevent backup spam (10 backups/minute per device)
+5. **Secrets Management**: All secrets via environment variables
+6. **SQL Injection**: SQLAlchemy ORM with parameterized queries
+7. **HTTPS**: Nginx terminates TLS in production
 
 ---
 
@@ -922,4 +1031,4 @@ The following UniFi device types should have corresponding images in `frontend/p
 
 *Plan created: February 16, 2026*
 *Last updated: February 18, 2026*
-*Version: 1.4*
+*Version: 1.5*
