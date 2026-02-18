@@ -36,6 +36,9 @@ services:
       - FERNET_KEY=${FERNET_KEY:?FERNET_KEY is required}
       - DEBUG=false
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - ADMIN_USERNAME=${ADMIN_USERNAME:-admin}
+      - ADMIN_EMAIL=${ADMIN_EMAIL:-admin@localhost}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD}
       - CORS_ORIGINS=["http://localhost","http://localhost:80","https://${DOMAIN:-localhost}"]
     depends_on:
       db:
