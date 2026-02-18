@@ -758,19 +758,9 @@ jobs:
         run: |
           pytest tests/ \
             --cov=app \
-            --cov-report=xml \
             --cov-report=term-missing \
             --cov-fail-under=70 \
             -v
-
-      - name: Upload coverage reports
-        uses: codecov/codecov-action@v4
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        with:
-          token: ${{ secrets.CODECOV_TOKEN }}
-          files: ./backend/coverage.xml
-          flags: backend
-          name: backend-coverage
 
   # ============================================================================
   # Frontend: Lint with ESLint
@@ -824,15 +814,6 @@ jobs:
 
       - name: Run Vitest
         run: npm run test:ci
-
-      - name: Upload coverage reports
-        uses: codecov/codecov-action@v4
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        with:
-          token: ${{ secrets.CODECOV_TOKEN }}
-          files: ./frontend/coverage/lcov.info
-          flags: frontend
-          name: frontend-coverage
 
   # ============================================================================
   # Frontend: Build Check
@@ -909,7 +890,6 @@ on:
 
 env:
   REGISTRY: docker.io
-  DOCKER_HUB_USERNAME: rjsears
   IMAGE_NAME_API: unifi-backup-api
   IMAGE_NAME_FRONTEND: unifi-backup-frontend
 
@@ -948,14 +928,14 @@ jobs:
       - name: Log in to Docker Hub
         uses: docker/login-action@v3
         with:
-          username: ${{ env.DOCKER_HUB_USERNAME }}
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Extract metadata for Backend
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ env.REGISTRY }}/${{ env.DOCKER_HUB_USERNAME }}/${{ env.IMAGE_NAME_API }}
+          images: ${{ env.REGISTRY }}/${{ secrets.DOCKERHUB_USERNAME }}/${{ env.IMAGE_NAME_API }}
           tags: |
             type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
             type=semver,pattern={{version}}
@@ -1015,14 +995,14 @@ jobs:
       - name: Log in to Docker Hub
         uses: docker/login-action@v3
         with:
-          username: ${{ env.DOCKER_HUB_USERNAME }}
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Extract metadata for Frontend
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ env.REGISTRY }}/${{ env.DOCKER_HUB_USERNAME }}/${{ env.IMAGE_NAME_FRONTEND }}
+          images: ${{ env.REGISTRY }}/${{ secrets.DOCKERHUB_USERNAME }}/${{ env.IMAGE_NAME_FRONTEND }}
           tags: |
             type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
             type=semver,pattern={{version}}
@@ -1071,7 +1051,7 @@ jobs:
       - name: Run Trivy on Backend image
         uses: aquasecurity/trivy-action@master
         with:
-          image-ref: ${{ env.REGISTRY }}/${{ env.DOCKER_HUB_USERNAME }}/${{ env.IMAGE_NAME_API }}:latest
+          image-ref: ${{ env.REGISTRY }}/${{ secrets.DOCKERHUB_USERNAME }}/${{ env.IMAGE_NAME_API }}:latest
           format: 'sarif'
           output: 'trivy-backend.sarif'
           severity: 'CRITICAL,HIGH'
@@ -1079,7 +1059,7 @@ jobs:
       - name: Run Trivy on Frontend image
         uses: aquasecurity/trivy-action@master
         with:
-          image-ref: ${{ env.REGISTRY }}/${{ env.DOCKER_HUB_USERNAME }}/${{ env.IMAGE_NAME_FRONTEND }}:latest
+          image-ref: ${{ env.REGISTRY }}/${{ secrets.DOCKERHUB_USERNAME }}/${{ env.IMAGE_NAME_FRONTEND }}:latest
           format: 'sarif'
           output: 'trivy-frontend.sarif'
           severity: 'CRITICAL,HIGH'
@@ -1116,18 +1096,18 @@ jobs:
       - name: Update Backend Docker Hub README
         uses: peter-evans/dockerhub-description@v4
         with:
-          username: ${{ env.DOCKER_HUB_USERNAME }}
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
-          repository: ${{ env.DOCKER_HUB_USERNAME }}/${{ env.IMAGE_NAME_API }}
+          repository: ${{ secrets.DOCKERHUB_USERNAME }}/${{ env.IMAGE_NAME_API }}
           short-description: "UniFi Backup Manager - Backend API"
           readme-filepath: ./README.md
 
       - name: Update Frontend Docker Hub README
         uses: peter-evans/dockerhub-description@v4
         with:
-          username: ${{ env.DOCKER_HUB_USERNAME }}
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
-          repository: ${{ env.DOCKER_HUB_USERNAME }}/${{ env.IMAGE_NAME_FRONTEND }}
+          repository: ${{ secrets.DOCKERHUB_USERNAME }}/${{ env.IMAGE_NAME_FRONTEND }}
           short-description: "UniFi Backup Manager - Web Frontend"
           readme-filepath: ./README.md
 ```
@@ -1138,8 +1118,8 @@ Configure these secrets in your repository settings (Settings → Secrets and va
 
 | Secret | Description |
 |--------|-------------|
-| `DOCKERHUB_TOKEN` | Docker Hub access token (not password) |
-| `CODECOV_TOKEN` | Codecov upload token (optional, for coverage reports) |
+| `DOCKERHUB_USERNAME` | Your Docker Hub username |
+| `DOCKERHUB_TOKEN` | Docker Hub access token (create at hub.docker.com → Account Settings → Security → New Access Token) |
 
 ### Required npm Scripts (package.json)
 
@@ -1348,4 +1328,4 @@ The following UniFi device types should have corresponding images in `frontend/p
 
 *Plan created: February 16, 2026*
 *Last updated: February 18, 2026*
-*Version: 1.6*
+*Version: 1.7*
