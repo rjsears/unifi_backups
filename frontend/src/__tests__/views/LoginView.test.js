@@ -143,10 +143,6 @@ describe('LoginView', () => {
     it('should toggle password visibility when toggle button clicked', async () => {
       const wrapper = createWrapper()
 
-      // Find the password toggle button (the button in the password field div)
-      const passwordField = wrapper.find('#password')
-      const toggleButton = passwordField.element.parentElement.querySelector('button')
-
       await wrapper.find('button[type="button"]').trigger('click')
 
       expect(wrapper.find('#password').attributes('type')).toBe('text')
