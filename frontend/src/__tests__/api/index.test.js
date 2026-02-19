@@ -73,14 +73,14 @@ describe('API Module', () => {
 
   describe('interceptors registration', () => {
     it('should register request interceptor', async () => {
-      const api = await import('@/api')
+      await import('@/api')
       const mockInstance = axios.create()
 
       expect(mockInstance.interceptors.request.use).toHaveBeenCalled()
     })
 
     it('should register response interceptor', async () => {
-      const api = await import('@/api')
+      await import('@/api')
       const mockInstance = axios.create()
 
       expect(mockInstance.interceptors.response.use).toHaveBeenCalled()
