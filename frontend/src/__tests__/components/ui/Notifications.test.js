@@ -10,18 +10,20 @@ import { useNotificationsStore } from '@/stores/notifications'
 
 describe('Notifications Component', () => {
   let notificationsStore
+  let pinia
 
   function createWrapper() {
     return mount(Notifications, {
       global: {
-        plugins: [createPinia()],
+        plugins: [pinia],
       },
       attachTo: document.body,
     })
   }
 
   beforeEach(() => {
-    setActivePinia(createPinia())
+    pinia = createPinia()
+    setActivePinia(pinia)
     notificationsStore = useNotificationsStore()
     document.body.innerHTML = ''
   })

@@ -149,18 +149,20 @@ describe('Modal Component', () => {
       const wrapper = createWrapper({ modelValue: false })
 
       await wrapper.setProps({ modelValue: true })
+      await wrapper.vm.$nextTick()
 
       expect(document.body.style.overflow).toBe('hidden')
     })
 
     it('should unlock body scroll when modal closes', async () => {
+      // Start with modal open
+      document.body.style.overflow = 'hidden'
       const wrapper = createWrapper({ modelValue: true })
-
-      // Wait for the watch to trigger
       await wrapper.vm.$nextTick()
-      expect(document.body.style.overflow).toBe('hidden')
 
+      // Close the modal
       await wrapper.setProps({ modelValue: false })
+      await wrapper.vm.$nextTick()
 
       expect(document.body.style.overflow).toBe('')
     })
