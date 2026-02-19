@@ -38,6 +38,11 @@ describe('DeviceCard Component', () => {
       props: { device },
       global: {
         plugins: [createPinia()],
+        mocks: {
+          $router: {
+            push: mockPush,
+          },
+        },
         stubs: {
           RouterLink: true,
         },
