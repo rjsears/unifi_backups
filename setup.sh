@@ -949,6 +949,8 @@ services:
   db:
     image: postgres:15-alpine
     container_name: unifi-backup-db
+    security_opt:
+      - apparmor:unconfined
     volumes:
       - postgres_data:/var/lib/postgresql/data
     environment:
@@ -967,6 +969,8 @@ services:
   backend:
     image: \${DOCKERHUB_USERNAME:-rjsears}/unifi-backup-api:\${IMAGE_TAG:-latest}
     container_name: unifi-backup-api
+    security_opt:
+      - apparmor:unconfined
     volumes:
 ${backup_mount}
     environment:
@@ -989,6 +993,8 @@ ${backup_mount}
   frontend:
     image: \${DOCKERHUB_USERNAME:-rjsears}/unifi-backup-frontend:\${IMAGE_TAG:-latest}
     container_name: unifi-backup-frontend
+    security_opt:
+      - apparmor:unconfined
     restart: unless-stopped
     networks:
       - unifi-backup-net
@@ -996,6 +1002,8 @@ ${backup_mount}
   nginx:
     image: nginx:alpine
     container_name: unifi-backup-nginx
+    security_opt:
+      - apparmor:unconfined
     ports:
       - "80:80"
       - "443:443"
@@ -1012,6 +1020,8 @@ ${backup_mount}
   certbot:
     image: ${DNS_CERTBOT_IMAGE:-certbot/certbot:latest}
     container_name: unifi-backup-certbot
+    security_opt:
+      - apparmor:unconfined
     volumes:
       - letsencrypt:/etc/letsencrypt
       - ./certbot_data:/var/www/certbot

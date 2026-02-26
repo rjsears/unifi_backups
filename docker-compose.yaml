@@ -8,6 +8,8 @@ services:
   db:
     image: postgres:15-alpine
     container_name: unifi-backup-db
+    security_opt:
+      - apparmor:unconfined
     volumes:
       - postgres_data:/var/lib/postgresql/data
     environment:
@@ -28,6 +30,8 @@ services:
       context: ./backend
       dockerfile: ../docker/backend.Dockerfile
     container_name: unifi-backup-api
+    security_opt:
+      - apparmor:unconfined
     volumes:
       - ./backend:/app
       - backup_data:/backups
@@ -50,6 +54,8 @@ services:
       context: ./frontend
       dockerfile: ../docker/frontend.Dockerfile
     container_name: unifi-backup-frontend
+    security_opt:
+      - apparmor:unconfined
     volumes:
       - ./frontend:/app
       - /app/node_modules
